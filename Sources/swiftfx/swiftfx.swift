@@ -1,5 +1,16 @@
 import Foundation
 
+public func time<Result>(name: StaticString = #function,
+                         line: Int = #line,
+                         _ f: () -> Result) -> Result {
+    let startTime = DispatchTime.now()
+    let result = f()
+    let endTime = DispatchTime.now()
+    let diff = Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000_000 as Double
+    print("\(name) (line \(line)): \(diff) sec")
+    return result
+}
+
 // (* 0.5 200)
 
 // https://clojuredocs.org/clojure.core/*
