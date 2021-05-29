@@ -1,5 +1,42 @@
 import Foundation
 
+public func synchronized<T>(_ obj: Any, _ f: () throws -> T) rethrows -> T {
+    objc_sync_enter(obj)
+    defer { objc_sync_exit(obj) }
+    
+    return try f()
+}
+
+//var mut = 1
+//synchronized(mut) {
+//    // mut is not changed by other threads.
+//}
+
+public func concurrentMap<A,B>(_ array: [A], _ transform: @escaping (A) -> B) -> [B] {
+    let queue = DispatchQueue(label: "swiftfx.concurrentMap")
+    var result = Array<B?>(repeating: nil, count: array.count)
+    
+    DispatchQueue.concurrentPerform(iterations: array.count) { idx in
+        let element = array[idx]
+        let transformed = transform(element)
+        
+        queue.sync {
+            result[idx] = transformed
+        }
+    }
+    
+    return result.compactMap { $0 }
+}
+
+//let urls = ["https://swift.org",
+//            "https://google.com",
+//            "https://en.wikipedia.org/wiki/Static_web_page"]
+//
+//let res = concurrentMap(urls) { try! String(contentsOf: URL(string: $0)!) }
+//let counts = res.map { $0.count }.reduce(0, +)
+//print("counts : \(counts)")
+
+
 public func time<Result>(name: StaticString = #function,
                          line: Int = #line,
                          _ f: () -> Result) -> Result {
