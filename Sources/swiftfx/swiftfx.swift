@@ -48,6 +48,34 @@ public func time<Result>(name: StaticString = #function,
     return result
 }
 
+public func not(_ cond: Bool) -> Bool {
+    !cond
+}
+
+//not(true)
+//not(equal(2, 3))
+
+public func equal<T: Equatable>(_ a: T, _ b: T) -> Bool where T: Any {
+    a == b
+}
+
+public func first<T>(_ coll: T) -> T.Element? where T : Sequence,
+                                                    T.Iterator.Element : Any {
+    Array(coll).first
+}
+
+public func last<T>(_ coll: T) -> T.Element? where T : Sequence,
+                                                   T.Iterator.Element : Any {
+    Array(coll).last
+}
+
+//first([1,2])
+//last([1,2])
+
+public func type(_ any: Any) -> Any.Type {
+    return type(of: any)
+}
+
 // (* 0.5 200)
 
 // https://clojuredocs.org/clojure.core/*

@@ -1,5 +1,5 @@
     import XCTest
-    @testable import swiftfx
+    @testable import Swiftfx
 
     final class swiftfxTests: XCTestCase {
         func testExample() {
