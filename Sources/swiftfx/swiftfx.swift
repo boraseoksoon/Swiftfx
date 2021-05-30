@@ -12,31 +12,6 @@ public func synchronized<T>(_ obj: Any, _ f: () throws -> T) rethrows -> T {
 //    // mut is not changed by other threads.
 //}
 
-public func concurrentMap<A,B>(_ array: [A], _ transform: @escaping (A) -> B) -> [B] {
-    let queue = DispatchQueue(label: "swiftfx.concurrentMap")
-    var result = Array<B?>(repeating: nil, count: array.count)
-    
-    DispatchQueue.concurrentPerform(iterations: array.count) { idx in
-        let element = array[idx]
-        let transformed = transform(element)
-        
-        queue.sync {
-            result[idx] = transformed
-        }
-    }
-    
-    return result.compactMap { $0 }
-}
-
-//let urls = ["https://swift.org",
-//            "https://google.com",
-//            "https://en.wikipedia.org/wiki/Static_web_page"]
-//
-//let res = concurrentMap(urls) { try! String(contentsOf: URL(string: $0)!) }
-//let counts = res.map { $0.count }.reduce(0, +)
-//print("counts : \(counts)")
-
-
 public func time<Result>(name: StaticString = #function,
                          line: Int = #line,
                          _ f: () -> Result) -> Result {
@@ -46,6 +21,38 @@ public func time<Result>(name: StaticString = #function,
     let diff = Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000_000 as Double
     print("\(name) (line \(line)): \(diff) sec")
     return result
+}
+
+// credit: https://gist.github.com/dabrahams
+// reference: https://gist.github.com/dabrahams/ea5495b4cccc2970cd56e8cfc72ca761
+
+/// Returns `self.map(transform)`, computed in parallel.
+///
+/// - Requires: `transform` is safe to call from multiple threads.
+public func concurrentMap<A, B>(_ array: [A],
+                                minBatchSize: Int = 4096,
+                                transform: (A) -> B) -> [B] {
+    precondition(minBatchSize >= 1)
+    
+    let n = array.count
+    let batchCount = (n + minBatchSize - 1) / minBatchSize
+    if batchCount < 2 { return array.map(transform) }
+    
+    return Array(unsafeUninitializedCapacity: n) { uninitializedMemory, resultCount in
+        resultCount = n
+        let baseAddress = uninitializedMemory.baseAddress!
+        
+        DispatchQueue.concurrentPerform(iterations: batchCount) { b in
+            let startOffset = b * n / batchCount
+            let endOffset = (b + 1) * n / batchCount
+            
+            var sourceIndex = array.index(array.startIndex, offsetBy: startOffset)
+            for p in baseAddress+startOffset..<baseAddress+endOffset {
+                p.initialize(to: transform(array[sourceIndex]))
+                array.formIndex(after: &sourceIndex)
+            }
+        }
+    }
 }
 
 public func not(_ cond: Bool) -> Bool {
@@ -159,11 +166,10 @@ func pop<T>(_ col: T) -> [T.Element] where T : Sequence,
 //peek([1,2,3,4])
 //pop([1,2,3])
 
-
-func time(_ fn: (@escaping () -> ())) {
+public func time(_ f: (@escaping () -> ())) {
     let startTime = CFAbsoluteTimeGetCurrent()
-
-    fn()
+    
+    f()
     
     let timeElapsed = CFAbsoluteTimeGetCurrent() - startTime
     print("Elapsed Time: \(timeElapsed)")
@@ -192,7 +198,6 @@ func rand(_ digit: Double = 1.0) -> Double {
 //rand(2)
 //rand(2)
 //rand(2)
-
 
 //let set = hashSet([1,2,3])
 //set
@@ -273,8 +278,6 @@ func drop<T>(_ upto: Int, _ collection: T) -> [T.Element]
 //()
 //cljs.user=> (drop -1 {:a "a" :b "b"})
 //([:a "a"] [:b "b"])
-
-
 
 /// `cycle`
 /// "Returns a lazy (infinite!) sequence of repetitions of the items in coll."
