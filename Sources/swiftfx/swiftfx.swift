@@ -23,38 +23,6 @@ public func time<Result>(name: StaticString = #function,
     return result
 }
 
-// credit: https://gist.github.com/dabrahams
-// reference: https://gist.github.com/dabrahams/ea5495b4cccc2970cd56e8cfc72ca761
-
-/// Returns `self.map(transform)`, computed in parallel.
-///
-/// - Requires: `transform` is safe to call from multiple threads.
-public func concurrentMap<A, B>(_ array: [A],
-                                minBatchSize: Int = 4096,
-                                transform: (A) -> B) -> [B] {
-    precondition(minBatchSize >= 1)
-    
-    let n = array.count
-    let batchCount = (n + minBatchSize - 1) / minBatchSize
-    if batchCount < 2 { return array.map(transform) }
-    
-    return Array(unsafeUninitializedCapacity: n) { uninitializedMemory, resultCount in
-        resultCount = n
-        let baseAddress = uninitializedMemory.baseAddress!
-        
-        DispatchQueue.concurrentPerform(iterations: batchCount) { b in
-            let startOffset = b * n / batchCount
-            let endOffset = (b + 1) * n / batchCount
-            
-            var sourceIndex = array.index(array.startIndex, offsetBy: startOffset)
-            for p in baseAddress+startOffset..<baseAddress+endOffset {
-                p.initialize(to: transform(array[sourceIndex]))
-                array.formIndex(after: &sourceIndex)
-            }
-        }
-    }
-}
-
 public func not(_ cond: Bool) -> Bool {
     !cond
 }
@@ -516,4 +484,94 @@ public struct CycleIterator<C: Collection>: IteratorProtocol {
 //                            }
 //                         })
 //    )
+//}
+
+// credit: https://gist.github.com/dabrahams
+// reference: https://gist.github.com/dabrahams/ea5495b4cccc2970cd56e8cfc72ca761
+
+/// Returns `self.map(transform)`, computed in parallel.
+///
+/// - Requires: `transform` is safe to call from multiple threads.
+public func concurrentMap<A, B>(_ array: [A],
+                                minBatchSize: Int = 4096,
+                                transform: (A) -> B) -> [B] {
+    precondition(minBatchSize >= 1)
+    
+    let n = array.count
+    let batchCount = (n + minBatchSize - 1) / minBatchSize
+    if batchCount < 2 { return array.map(transform) }
+    
+    return Array(unsafeUninitializedCapacity: n) { uninitializedMemory, resultCount in
+        resultCount = n
+        let baseAddress = uninitializedMemory.baseAddress!
+        
+        DispatchQueue.concurrentPerform(iterations: batchCount) { b in
+            let startOffset = b * n / batchCount
+            let endOffset = (b + 1) * n / batchCount
+            
+            var sourceIndex = array.index(array.startIndex, offsetBy: startOffset)
+            for p in baseAddress+startOffset..<baseAddress+endOffset {
+                p.initialize(to: transform(array[sourceIndex]))
+                array.formIndex(after: &sourceIndex)
+            }
+        }
+    }
+}
+
+//public func time<Result>(name: StaticString = #function,
+//                         line: Int = #line,
+//                         _ f: () -> Result) -> Result {
+//    let startTime = DispatchTime.now()
+//    let result = f()
+//    let endTime = DispatchTime.now()
+//    let diff = Double(endTime.uptimeNanoseconds - startTime.uptimeNanoseconds) / 1_000_000_000 as Double
+//    print("\(name) (line \(line)): \(diff) sec")
+//    return result
+//}
+
+//let arr = Array(0...9999999)
+
+//time {
+//    arr.map { $0 &+ 1 }                       // 1.855952671 sec(Swift standard library)
+
+//    let _ = concurrentMap(arr) { $0 &+ 1 }    // 0.410607567 sec(current implementation)
+//    arr.concurrentMap { $0 &+ 1 }             // 57.975536616 sec
+//}
+
+// Implementation from https://talk.objc.io/episodes/S01E90-concurrent-map
+//import Foundation
+//
+//extension Array {
+//    func concurrentMap<B>(_ transform: @escaping (Element) -> B) -> [B] {
+//        let result = ThreadSafe(Array<B?>(repeating: nil, count: count))
+//
+//        DispatchQueue.concurrentPerform(iterations: count) { idx in
+//            let element = self[idx]
+//            let transformed = transform(element)
+//            result.atomically {
+//                $0[idx] = transformed
+//            }
+//        }
+//
+//        return result.value.map { $0! }
+//    }
+//
+//    private final class ThreadSafe<A> {
+//        private var _value: A
+//        private let queue = DispatchQueue(label: "concurrentMap.threadSafe")
+//
+//        init(_ value: A) {
+//            self._value = value
+//        }
+//
+//        var value: A {
+//            return queue.sync { _value }
+//        }
+//
+//        func atomically(_ transform: (inout A) -> ()) {
+//            queue.sync {
+//                transform(&self._value)
+//            }
+//        }
+//    }
 //}
